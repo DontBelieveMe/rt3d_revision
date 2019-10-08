@@ -75,22 +75,22 @@ Color MakeColor(int r, int g, int b);
 
 // Here are some colors (from the old, 16-color EGA palette) to get you
 // started.  You can make your own using the same MakeColor function.
-static const Color Black =        MakeColor(  0,   0,   0);
-static const Color Blue =         MakeColor(  0,   0, 170);
-static const Color Green =        MakeColor(  0, 170,   0);
-static const Color Cyan =         MakeColor(  0, 170, 170);
-static const Color Red =          MakeColor(170,   0,   0);
-static const Color Magenta =      MakeColor(170,   0, 170);
-static const Color Brown =        MakeColor(170,  85,   0);
-static const Color LightGray =    MakeColor(170, 170, 170);
-static const Color DarkGray =     MakeColor( 85,  85,  85);
-static const Color LightBlue =    MakeColor( 85,  85, 170);
-static const Color LightGreen =   MakeColor( 85, 255,  85);
-static const Color LightCyan =    MakeColor( 85, 255, 255);
-static const Color LightRed =     MakeColor(255,  85,  85);
-static const Color LightMagenta = MakeColor(255,  85, 255);
-static const Color Yellow =       MakeColor(255, 255,  85);
-static const Color White =        MakeColor(255, 255, 255);
+static const Color Black = MakeColor(0, 0, 0);
+static const Color Blue = MakeColor(0, 0, 170);
+static const Color Green = MakeColor(0, 170, 0);
+static const Color Cyan = MakeColor(0, 170, 170);
+static const Color Red = MakeColor(170, 0, 0);
+static const Color Magenta = MakeColor(170, 0, 170);
+static const Color Brown = MakeColor(170, 85, 0);
+static const Color LightGray = MakeColor(170, 170, 170);
+static const Color DarkGray = MakeColor(85, 85, 85);
+static const Color LightBlue = MakeColor(85, 85, 170);
+static const Color LightGreen = MakeColor(85, 255, 85);
+static const Color LightCyan = MakeColor(85, 255, 255);
+static const Color LightRed = MakeColor(255, 85, 85);
+static const Color LightMagenta = MakeColor(255, 85, 255);
+static const Color Yellow = MakeColor(255, 255, 85);
+static const Color White = MakeColor(255, 255, 255);
 
 
 
@@ -243,15 +243,15 @@ char LastKey();
 //
 enum Keys
 {
-    Left = 0x11,
-    Up,
-    Right,
-    Down,
+	Left = 0x11,
+	Up,
+	Right,
+	Down,
 
-    Backspace = 8,
-    Enter = 13,
-    Esc = 27,
-    Tab = 9,
+	Backspace = 8,
+	Enter = 13,
+	Esc = 27,
+	Tab = 9,
 };
 
 
@@ -265,14 +265,9 @@ bool MiddleMousePressed();
 int MouseX();
 int MouseY();
 
-// Returns the width (in pixels) that the given string will require when drawn
-int MeasureString(const std::string &s);
 
-// Returns the width of the printed character in pixels
-int DrawCharacter(int left, int top, char c, Color color);
-
-void DrawString(int x, int y, const std::string &s, const Color color);
 void BlitPixels(uint32_t* pSource, int screenX, int screenY, int sourceX, int sourceY, int w, int h, int sourceW);
+void Present(uint32_t* pSource);
 int SaveNewBitmap2PNG(uint32_t* sourceImage, std::string &fileAndPath, int width, int height);
 int LoadPNGThumbBits(std::string &fileAndPath, int width, int height, uint32_t* destImage);
 int LoadPNGBits(std::string &fileAndPath, int width, int height, uint32_t* destImage);

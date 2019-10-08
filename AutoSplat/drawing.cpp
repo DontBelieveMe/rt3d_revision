@@ -429,6 +429,29 @@ void BlitPixels(uint32_t* pSource, int screenX, int screenY, int sourceX, int so
 	SetDirty();
 }
 
+void Present(uint32_t* pSource )
+{
+	lock_guard<mutex> lock(bitmapLock);
+	if (!bitmap) return;
+
+	Gdiplus::BitmapData d;
+
+	Gdiplus::Rect r(0, 0, Width, Height);
+	bitmap->LockBits(&r, Gdiplus::ImageLockModeWrite, bitmap->GetPixelFormat(), &d);
+	uint32_t* dest = reinterpret_cast<uint32_t*>(d.Scan0);
+
+	for (int y = 0; y < Height; y++)
+	{
+		for (int x = 0; x < Width; x++)
+		{
+			*dest++ = *pSource++;
+		}
+	}
+
+	bitmap->UnlockBits(&d);
+	SetDirty();
+}
+
 void Present(const std::vector<Color> &screen)
 {
     if (screen.size() != Width * Height) return;
@@ -798,93 +821,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int cmdShow)
 // Extra credit challenge: Test for Backspace and make it behave the way you'd expect!
 //
 
-// This block of numbers encodes a monochrome, 5-pixel-tall font for the first 127 ASCII characters!
-//
-// Bits are shifted out one at a time as each row is drawn (top to bottom).  Because each glyph fits
-// inside an at-most 5x5 box, we can store all 5x5 = 25-bits fit inside a 32-bit unsigned int with
-// room to spare.  That extra space is used to store that glyph's width in the most significant nibble.
-//
-// The first 32 entries are unprintable characters, so each is totally blank with a width of 0
-//
-static const unsigned int Font[128] = {
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0x10000000, 0x10000017, 0x30000C03, 0x50AFABEA, 0x509AFEB2, 0x30004C99, 0x400A26AA, 0x10000003, 0x2000022E, 0x200001D1, 0x30001445, 0x300011C4, 0x10000018, 0x30001084, 0x10000010, 0x30000C98,
-	0x30003A2E, 0x300043F2, 0x30004AB9, 0x30006EB1, 0x30007C87, 0x300026B7, 0x300076BF, 0x30007C21, 0x30006EBB, 0x30007EB7, 0x1000000A, 0x1000001A, 0x30004544, 0x4005294A, 0x30001151, 0x30000AA1,
-	0x506ADE2E, 0x300078BE, 0x30002ABF, 0x3000462E, 0x30003A3F, 0x300046BF, 0x300004BF, 0x3000662E, 0x30007C9F, 0x1000001F, 0x30003E08, 0x30006C9F, 0x3000421F, 0x51F1105F, 0x51F4105F, 0x4007462E,
-	0x300008BF, 0x400F662E, 0x300068BF, 0x300026B2, 0x300007E1, 0x30007E1F, 0x30003E0F, 0x50F8320F, 0x30006C9B, 0x30000F83, 0x30004EB9, 0x2000023F, 0x30006083, 0x200003F1, 0x30000822, 0x30004210,
-	0x20000041, 0x300078BE, 0x30002ABF, 0x3000462E, 0x30003A3F, 0x300046BF, 0x300004BF, 0x3000662E, 0x30007C9F, 0x1000001F, 0x30003E08, 0x30006C9F, 0x3000421F, 0x51F1105F, 0x51F4105F, 0x4007462E,
-	0x300008BF, 0x400F662E, 0x300068BF, 0x300026B2, 0x300007E1, 0x30007E1F, 0x30003E0F, 0x50F8320F, 0x30006C9B, 0x30000F83, 0x30004EB9, 0x30004764, 0x1000001F, 0x30001371, 0x50441044, 0x00000000,
-};
 
-#define FONT_SCALE 3
-// Returns the width (in pixels) that the given string will require when drawn
-int MeasureString(const std::string &s)
-{
-	// We're going to sum the width of each character in the string
-	int result = 0;
 
-	for (char c : s)
-	{
-		// Grab the glyph for that character from our font
-		unsigned int glyph = Font[c];
 
-		// Retrieve the width (stored in the top nibble)
-		int width = glyph >> 28;
-
-		// Skip invisible characters
-		if (width == 0) continue;
-
-		// The +1 is for the space between letters
-		result += (width *FONT_SCALE) + (int)ceil(FONT_SCALE / 1.5f);
-	}
-
-	// Trim the trailing space that we added on the last letter
-	// (as long as there was at least one printable character)
-	if (result > 0) result -= 1;
-
-	return result;
-}
-
-// Draws a single character to the screen
-//
-// Returns the width of the printed character in pixels
-//
-
-int DrawCharacter(int left, int top, char c, Color color)
-{
-	unsigned int glyph = Font[c];
-	int width = (glyph >> 28);
-
-	// Loop over the bounding box of the glyph
-	for (int x = left; x < left + (width*FONT_SCALE); x+=FONT_SCALE)
-	{
-		for (int y = top; y < top + (5*FONT_SCALE); y+=FONT_SCALE)
-		{
-			// If the current (LSB) bit is 1, we draw this pixel
-			if ((glyph & 1) == 1)
-			{
-				for (int dy = 0; dy < FONT_SCALE; dy++)
-				{
-					for (int dx = 0; dx < FONT_SCALE; dx++)
-						SetPixel(x + dx, y + dy, color);
-				}
-			}
-			// Shift out the next pixel from our packed glyph
-			glyph = glyph >> 1;
-		}
-	}
-
-	return width * FONT_SCALE;
-}
-
-void DrawString(int x, int y, const std::string &s, const Color color)
-{
-	for (char c : s)
-	{
-		// The +1 is for the space between letters
-		x += DrawCharacter(x, y, c, color) + (int)ceil(FONT_SCALE/1.5f);
-	}
-}
 
 
 int SaveNewBitmap2PNG(uint32_t* sourceImage, string &fileAndPath, int width, int height)

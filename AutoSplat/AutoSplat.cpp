@@ -8,6 +8,16 @@ using namespace std;
 #include "drawing.h"
 #include "AutoSplat.h"
 
+#define BUFFER_DISPLAY	0
+#define BUFFER_MAP		1
+#define BUFFER_THUMB	2
+
+#define MAP_WIDTH		2048
+#define MAP_HEIGHT		2048
+
+#define THUMB_WIDTH		2048
+#define THUMB_HEIGHT	2048
+
 
 // These macros define the positions of everything on the screen
 #define _TIMXPOS(t) (1 + (33 * (int)((t) % 8)))
@@ -39,7 +49,11 @@ using namespace std;
 #define MESSX	534
 #define	MESSY	1056
 
+#define DISPLAY_WIDTH	1560
+#define DISPLAY_HEIGHT	1080
+
 uint32_t* g_pMapBuffer = 0;
+uint32_t* g_pDisplayBuffer = 0;
 uint32_t* g_pThumbBuffer = 0;
 vector<SHARED_CLUT> g_vCLUTs;
 vector<string> g_vTextures;
@@ -55,8 +69,12 @@ int main()
 	string fileAndPath(argv[1]);
 	TIM_FILE* pTIMData = 0;
 	SEGMENT* pSegmentData = 0;
-	g_pMapBuffer = new uint32_t[2048 * 2048];
-	g_pThumbBuffer = new uint32_t[2048 * 2048];
+	g_pMapBuffer = new uint32_t[MAP_WIDTH * MAP_HEIGHT];
+	memset(g_pMapBuffer, 0, MAP_WIDTH * MAP_HEIGHT * sizeof(uint32_t));
+	g_pThumbBuffer = new uint32_t[THUMB_WIDTH * THUMB_HEIGHT];
+	memset(g_pThumbBuffer, 0, THUMB_WIDTH * THUMB_HEIGHT * sizeof(uint32_t));
+	g_pDisplayBuffer = new uint32_t[DISPLAY_WIDTH * DISPLAY_HEIGHT];
+	memset(g_pDisplayBuffer, 0, DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint32_t));
 	int xscroll = 0;
 	int yscroll = 0;
 	bool bRestoredData = false;
@@ -101,7 +119,7 @@ int main()
 	g_clutBase = _CLUTYPOS(uniqueCLUTs - 1) + 34;
 
 	DrawSegments2Buffer(pSegmentData);
-	BlitPixels(g_pMapBuffer, BUFX, BUFY, 0, 0, 1024, 1024, 2048);
+	BlitPixels2Display(g_pMapBuffer, BUFX, BUFY, 0, 0, 1024, 1024, 2048);
 
 	// **************************************
 	//  Prepare directory structure
@@ -146,6 +164,8 @@ int main()
 	while ( !bExit )
 	{
 		bool bUpdateCLUTs = false , bUpdateColours = false, bUpdateChannels = false, bUpdateSegments = false, bUpdateTIMs = false, bUpdateTextures = false;
+
+		bool bDirty = false;
 
 		if( bRestoredData )
 			{ bUpdateCLUTs = true, bUpdateColours = true, bUpdateChannels = true, bUpdateSegments = true; bUpdateTIMs = true; bRestoredData = false; }
@@ -243,9 +263,6 @@ int main()
 		if (lightTexture != prevLightTexture)
 			bUpdateTextures = true;
 
-
-
-
 		// ***********************************************
 		//  Refresh screen when all TIMs change
 		// ***********************************************
@@ -258,6 +275,8 @@ int main()
 			// Draw all the CLUTs again
 			for (int u = 0; u < uniqueCLUTs; u++)
 				DrawTIM(pTIMData[g_vCLUTs[u].sharedRefs[0]], _CLUTXPOS(u), _CLUTYPOS(u));
+
+			bDirty = true;
 		}
 
 		// **************************************
@@ -268,32 +287,33 @@ int main()
 		{
 			// Remove outlines from previously highlighted TIMs
 			for (int t : g_vCLUTs[prevSelCLUT].sharedRefs)
-				DrawRectangle(_TIMXPOS(t) - 1, _TIMYPOS(t) - 1, 34, 34, MakeColor(0, 0, 0), false);
+				DrawBufferRectangle(BUFFER_DISPLAY, _TIMXPOS(t) - 1, _TIMYPOS(t) - 1, 34, 34, MakeColor(0, 0, 0), false);
 
 			// Add outline to newly highlighted TIMs
 			for (int t : g_vCLUTs[selCLUT].sharedRefs)
-				DrawRectangle(_TIMXPOS(t) - 1, _TIMYPOS(t) - 1, 34, 34, MakeColor(255, 255, 0), false);
+				DrawBufferRectangle(BUFFER_DISPLAY, _TIMXPOS(t) - 1, _TIMYPOS(t) - 1, 34, 34, MakeColor(255, 255, 0), false);
 
 			// Update outlines of previously and currently selected CLUTs
-			DrawRectangle(_CLUTXPOS(prevSelCLUT) - 1, _CLUTYPOS(prevSelCLUT) - 1, 34, 34, MakeColor(0, 0, 0), false);
-			DrawRectangle(_CLUTXPOS(selCLUT) - 1, _CLUTYPOS(selCLUT) - 1, 34, 34, MakeColor(255, 255, 0), false);
+			DrawBufferRectangle(BUFFER_DISPLAY, _CLUTXPOS(prevSelCLUT) - 1, _CLUTYPOS(prevSelCLUT) - 1, 34, 34, MakeColor(0, 0, 0), false);
+			DrawBufferRectangle(BUFFER_DISPLAY, _CLUTXPOS(selCLUT) - 1, _CLUTYPOS(selCLUT) - 1, 34, 34, MakeColor(255, 255, 0), false);
 
 			// Redraw the TIM of the previous selected CLUT and put a black square in the TIM of the currently selected CLUT
 			DrawTIM(pTIMData[g_vCLUTs[prevSelCLUT].sharedRefs[0]], _CLUTXPOS(prevSelCLUT), _CLUTYPOS(prevSelCLUT));
-			DrawRectangle(_CLUTXPOS(selCLUT) + 11, _CLUTYPOS(selCLUT) + 11, 10, 10, MakeColor(0, 0, 0), true);
+			DrawBufferRectangle(BUFFER_DISPLAY, _CLUTXPOS(selCLUT) + 11, _CLUTYPOS(selCLUT) + 11, 10, 10, MakeColor(0, 0, 0), true);
 
 			// Display how many TIMs share this CLUT
-			DrawRectangle(6, timBase + 4, 8 * 32, 32, MakeColor(0, 0, 0), true);
+			DrawBufferRectangle(BUFFER_DISPLAY, 6, timBase + 4, 8 * 32, 32, MakeColor(0, 0, 0), true);
 			DrawString(6, timBase + 4, to_string(g_vCLUTs[selCLUT].sharedRefs.size()) + " selected TIMs", MakeColor(255, 255, 255));
 
 			// Redraw the colours in the CLUT
 			for (int c = 0; c < 16; c++)
-				DrawRectangle(_COLXPOS(c) - 1, _COLYPOS(c) - 1, 33, 33, MakeColor(0, 0, 0), false);
+				DrawBufferRectangle(BUFFER_DISPLAY, _COLXPOS(c) - 1, _COLYPOS(c) - 1, 33, 33, MakeColor(0, 0, 0), false);
 
 			for (int c = 0; c < 16; c++)
-				DrawRectangle(_COLXPOS(c), _COLYPOS(c), 31, 31, GetOriginalCLUTcolour(g_vCLUTs[selCLUT], c), true);
+				DrawBufferRectangle(BUFFER_DISPLAY, _COLXPOS(c), _COLYPOS(c), 31, 31, GetOriginalCLUTcolour(g_vCLUTs[selCLUT], c), true);
 
 			prevSelCLUT = selCLUT;
+			bDirty = true;
 		}
 
 		// ***********************************************
@@ -304,7 +324,7 @@ int main()
 			DrawString(273, g_clutBase + 14, "16 colours", MakeColor(255, 255, 255));
 
 			for (int c = 0; c < 16; c++)
-				DrawRectangle(_COLXPOS(c), _COLYPOS(c), 31, 31, GetOriginalCLUTcolour(g_vCLUTs[selCLUT], c), true);
+				DrawBufferRectangle(BUFFER_DISPLAY, _COLXPOS(c), _COLYPOS(c), 31, 31, GetOriginalCLUTcolour(g_vCLUTs[selCLUT], c), true);
 
 			for (int c = 0; c < 16; c++)
 			{
@@ -313,16 +333,17 @@ int main()
 				if (g_vCLUTs[selCLUT].channels[c] != -1)
 				{
 					col = g_chanCol[g_vCLUTs[selCLUT].channels[c]];
-					DrawRectangle(_COLXPOS(c) + 11, _COLYPOS(c) + 11, 10, 10, col, true);
+					DrawBufferRectangle(BUFFER_DISPLAY, _COLXPOS(c) + 11, _COLYPOS(c) + 11, 10, 10, col, true);
 				}
 
-				DrawRectangle(_COLXPOS(c) - 1, _COLYPOS(c) - 1, 33, 33, col, false);
+				DrawBufferRectangle(BUFFER_DISPLAY, _COLXPOS(c) - 1, _COLYPOS(c) - 1, 33, 33, col, false);
 			}
 
 			for (int t : g_vCLUTs[prevSelCLUT].sharedRefs)
 				DrawTIM(pTIMData[t], _TIMXPOS(t), _TIMYPOS(t));
 
 			prevSelCol = selCol;
+			bDirty = true;
 		}
 
 
@@ -335,13 +356,14 @@ int main()
 			DrawString(273, g_clutBase + 112, "9 channels", MakeColor(255, 255, 255));
 
 			for (int c = 0; c<SPLAT_CHANNELS; c++)
-				DrawRectangle(_CHXPOS(c), _CHYPOS(c), 32, 32, g_chanCol[c], true);
+				DrawBufferRectangle(BUFFER_DISPLAY, _CHXPOS(c), _CHYPOS(c), 32, 32, g_chanCol[c], true);
 
-			DrawRectangle(_CHXPOS(prevSelChan) - 1, _CHYPOS(prevSelChan) - 1, 34, 34, MakeColor(0, 0, 0), false);
-			DrawRectangle(_CHXPOS(selChan) - 1, _CHYPOS(selChan) - 1, 34, 34, MakeColor(255, 255, 255), false);
-			DrawRectangle(_CHXPOS(selChan) + 11, _CHYPOS(selChan) + 11, 10, 10, MakeColor(0, 0, 0), true);
+			DrawBufferRectangle(BUFFER_DISPLAY, _CHXPOS(prevSelChan) - 1, _CHYPOS(prevSelChan) - 1, 34, 34, MakeColor(0, 0, 0), false);
+			DrawBufferRectangle(BUFFER_DISPLAY, _CHXPOS(selChan) - 1, _CHYPOS(selChan) - 1, 34, 34, MakeColor(255, 255, 255), false);
+			DrawBufferRectangle(BUFFER_DISPLAY, _CHXPOS(selChan) + 11, _CHYPOS(selChan) + 11, 10, 10, MakeColor(0, 0, 0), true);
 
 			prevSelChan = selChan;
+			bDirty = true;
 		}
 
 
@@ -354,10 +376,11 @@ int main()
 		if (bUpdateSegments == true && theMode == MODE_MAP)
 		{
 			DrawSegments2Buffer(pSegmentData);
-			BlitPixels(g_pMapBuffer, BUFX, BUFY, xscroll, yscroll, 1024, 1024, 2048);
+			BlitPixels2Display(g_pMapBuffer, BUFX, BUFY, xscroll, yscroll, 1024, 1024, 2048);
 
-			DrawRectangle(1300, 3, 260, 20, MakeColor(0, 0, 0), true);
+			DrawBufferRectangle(BUFFER_DISPLAY, 1300, 3, 259, 20, MakeColor(0, 0, 0), true);
 			DrawString(1560-swidth-4, 4, coords, MakeColor(255, 255, 255));
+			bDirty = true;
 		}
 
 
@@ -366,7 +389,7 @@ int main()
 		// ***********************************************
 		if (bUpdateTextures == true && theMode == MODE_TEXTURES )
 		{
-			BlitPixels(g_pThumbBuffer, BUFX, BUFY, xscroll, yscroll, 1024, 1024, 2048);
+			BlitPixels2Display(g_pThumbBuffer, BUFX, BUFY, xscroll, yscroll, 1024, 1024, 2048);
 
 			int relXPos =  _TEXTUREXPOS(selTexture);
 			int relYPos =  _TEXTUREYPOS(selTexture);
@@ -375,8 +398,8 @@ int main()
 			{
 				relXPos = relXPos % 1024;
 				relYPos = relYPos % 1024;
-				DrawRectangle(BUFX + relXPos, BUFY + relYPos, 64, 64, MakeColor(255, 255, 255), false);
-				DrawRectangle(BUFX + relXPos + 17, BUFY + relYPos + 17, 30, 30, MakeColor(0, 0, 0), true);
+				DrawBufferRectangle(BUFFER_DISPLAY, BUFX + relXPos, BUFY + relYPos, 64, 64, MakeColor(255, 255, 255), false);
+				DrawBufferRectangle(BUFFER_DISPLAY, BUFX + relXPos + 17, BUFY + relYPos + 17, 30, 30, MakeColor(0, 0, 0), true);
 			}
 
 			prevSelTexture = selTexture;
@@ -400,27 +423,32 @@ int main()
 					int xClamp = (relXPos - (w / 2) + 32);
 					if (xClamp < 0) xClamp = 0;
 					if (xClamp + w > 1024) xClamp = 1024 - w;
-					DrawRectangle(BUFX + xClamp, BUFY + relYPos + 32, w, 24, MakeColor(0, 0, 0), true);
+					DrawBufferRectangle(BUFFER_DISPLAY, BUFX + xClamp, BUFY + relYPos + 32, w, 24, MakeColor(0, 0, 0), true);
 					DrawString(BUFX + xClamp, BUFY + relYPos + 32 + 4, s, MakeColor(255, 255, 255));
 				}
 			}
 
 			prevLightTexture = lightTexture;
 
-			DrawRectangle(1300, 3, 260, 20, MakeColor(0, 0, 0), true);
+			DrawBufferRectangle(BUFFER_DISPLAY, 1300, 3, 259, 20, MakeColor(0, 0, 0), true);
 			DrawString(1560 - swidth-4, 4, coords, MakeColor(255, 255, 255));
+			bDirty = true;
 		}
 
 		frame++;
+
+		if( bDirty )
+			Present(g_pDisplayBuffer);
 
 	}
 
 	CloseWindow();
 
-	delete pTIMData;
-	delete pSegmentData;
-	delete g_pMapBuffer;
-	delete g_pThumbBuffer;
+	delete [] pTIMData;
+	delete [] pSegmentData;
+	delete [] g_pMapBuffer;
+	delete [] g_pThumbBuffer;
+	delete [] g_pDisplayBuffer;
 
 	return 0;
 } // Happily ever after
@@ -446,6 +474,74 @@ int Error(const char* message)
 	return -1;
 }
 
+// Get and set pixels within the buffers
+inline void SetMapBufferPixel(int x, int y, Color c) {	g_pMapBuffer[(y * MAP_WIDTH) + x] = c; }
+inline Color GetMapBufferPixel(int x, int y) {	return g_pMapBuffer[(y * MAP_WIDTH) + x]; }
+inline void SetThumbBufferPixel(int x, int y, Color c) { g_pThumbBuffer[(y * THUMB_WIDTH) + x] = c; }
+inline Color GetThumbBufferPixel(int x, int y) { return g_pThumbBuffer[(y * THUMB_HEIGHT) + x]; }
+inline void SetDisplayBufferPixel(int x, int y, Color c) {	g_pDisplayBuffer[(y * DISPLAY_WIDTH) + x] = c; }
+inline Color GetDisplayBufferPixel(int x, int y) {	return g_pDisplayBuffer[(y * DISPLAY_WIDTH) + x]; }
+
+void BlitPixels2Display(uint32_t* pSource, int screenX, int screenY, int sourceX, int sourceY, int w, int h, int sourceW)
+{
+	if (screenX < 0 || screenX >= DISPLAY_WIDTH || screenY < 0 || screenY >= DISPLAY_HEIGHT) return;
+	if (screenX + w < 0 || screenX + w >= DISPLAY_WIDTH || screenY + h < 0 || screenY + h >= DISPLAY_HEIGHT) 
+		return;
+
+	uint32_t* dest = g_pDisplayBuffer + (screenY*DISPLAY_WIDTH) + screenX;
+
+	pSource += (sourceY*sourceW) + sourceX;
+
+	for (int y = 0; y < h; y++)
+	{
+		for (int x = 0; x < w; x++)
+		{
+			*dest++ = *pSource++;
+		}
+		dest += DISPLAY_WIDTH - w;
+		pSource += sourceW - w;
+	}
+}
+
+void DrawBufferRectangle(uint32_t* dest, int x, int y, int w, int h, Color c, bool fill, int bufWidth, int bufHeight)
+{
+	if (x < 0 || x >= bufWidth || y < 0 || y > bufHeight) return;
+	if (x + w < 0 || x + w >= bufWidth || y + h < 0 || y + h > bufHeight) return;
+
+	dest += (y*bufWidth) + x;
+
+	for (int dy = 0; dy < h; dy++)
+	{
+		for (int dx = 0; dx < w; dx++)
+		{
+			if (fill == true || dy == 0 || dy == h - 1 || dx == 0 || dx == w - 1)
+				*dest = c;
+
+			dest++;
+		}
+		dest += bufWidth - w;
+	}
+}
+
+void DrawBufferRectangle(int buffer, int x, int y, int w, int h, Color c, bool fill)
+{
+	switch (buffer)
+	{
+		case BUFFER_DISPLAY:
+			DrawBufferRectangle(g_pDisplayBuffer, x, y, w, h, c, fill, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+			break;
+		case BUFFER_MAP:
+			DrawBufferRectangle(g_pMapBuffer, x, y, w, h, c, fill, MAP_WIDTH, MAP_HEIGHT);
+			break;
+		case BUFFER_THUMB:
+			DrawBufferRectangle(g_pThumbBuffer, x, y, w, h, c, fill, THUMB_WIDTH, THUMB_HEIGHT);
+			break;
+	}
+}
+
+
+
+
 
 // Function:	DrawTIM
 // Description: Draws a 4-bit TIM into the 32-bit display buffer one pixel at a time!
@@ -460,7 +556,7 @@ int DrawTIM(TIM_FILE& timData, int x, int y)
 			int colourIndex = timData.pixel.pixelData[pixelIndex];
 			colourIndex = (colourIndex>> ((dx % 4) * 4)) & 0xF;
 			Color col = GetCLUTcolour(timData.clut, colourIndex);
-			SetPixel(x + dx, y + dy, col );
+			SetDisplayBufferPixel(x + dx, y + dy, col );
 		}
 	}
 	return 0;
@@ -541,8 +637,8 @@ int UnmanglePTM(char* filename, TIM_FILE* &pTims )
 	pTims = new TIM_FILE[timCount];
 	memcpy(pTims, (char*)&pUnmangleBuffer[4], sizeof(TIM_FILE)*timCount);
 
-	delete pUnmangleBuffer;
-	delete pInputBuffer;
+	delete [] pUnmangleBuffer;
+	delete [] pInputBuffer;
 	   
 	return timCount; // up to calling program to delete memory!
 }
@@ -578,8 +674,8 @@ int UnmanglePMM(char* filename, SEGMENT* &pSegments)
 	pSegments = new SEGMENT[segmentCount];
 	memcpy(pSegments, (char*)pUnmangleBuffer, sizeof(SEGMENT)*segmentCount);
 	
-	delete pUnmangleBuffer;
-	delete pInputBuffer;
+	delete [] pUnmangleBuffer;
+	delete [] pInputBuffer;
 
 	return segmentCount; // up to calling program to delete memory!
 }
@@ -639,11 +735,6 @@ int CalculateUniqueCLUTs(TIM_FILE* pTims, int timCount, vector<SHARED_CLUT> &vCL
 }
 
 
-// Sets a pixel within the map display buffer (2048 x 2048 pixels @ 32-bit)
-void SetBufferPixel(int x, int y, Color c)
-{
-	g_pMapBuffer[(y * 2048) + x] = c;
-}
 
 // Function:	CopyTIM2Buffer
 // Description: Copies a TIM from the display buffer to the map buffer in the correct orientation
@@ -653,22 +744,19 @@ void SetBufferPixel(int x, int y, Color c)
 int CopyTIM2Buffer(int sourcex, int sourcey, int destx, int desty, int rot)
 {
 	// TO DO: Implement this function (see slides)
-
 	return 0;
 }
 
 // Function:	DrawSegments2Buffer
 // Description: Draws a representation of the orginal level to the map display buffer 
 // Arguments:	pSegments - pointer to the array of SEGMENT data representing the map
-//				pTIMData - pointer to the array of TIM data storing the textures
 // Notes:		Pulls the TIM data from the display buffer as it is already in the correct bit depth
 //				(32-bit) and copying it automatically propogates any colour changes to the map
 int DrawSegments2Buffer(SEGMENT* pSegments)
 {
 	// TO DO: Implement this function (see slides)
-	// Note the code below should copy the TIM at index "tileIndex" to the map grid square "mapIndex" 
+	// Note the code below should copy the TIM at index "tileIndex" to the map grid square "mapIndex"
 	// CopyTIM2Buffer(_TIMXPOS(tileIndex), _TIMYPOS(tileIndex), _MAPXPOS(mapIndex), _MAPYPOS(mapIndex), tileRot);
-
 	return 0;
 }
 
@@ -689,7 +777,7 @@ int SaveDiffusePNG(string &folderPath, SEGMENT* pSegmentData, TIM_FILE* pTIMData
 
 	int ret = SaveNewBitmap2PNG(g_pMapBuffer, fileAndPath, 2048, 2048);
 
-	DrawRectangle(MESSX, MESSY-1, 1024, 32, MakeColor(0, 0, 0), true);
+	DrawBufferRectangle(BUFFER_DISPLAY, MESSX, MESSY-1, 1024, 32, MakeColor(0, 0, 0), true);
 
 	return ret;
 }
@@ -733,12 +821,12 @@ int SaveChannelPNGs(string &folderPath, SEGMENT* pSegmentData, TIM_FILE* pTIMDat
 		if( SaveNewBitmap2PNG(pChannelBuffer, fileAndPath, 2048, 2048) != 1 )
 			return Error("Error: Unable to save channel PNGs.");
 
-		DrawRectangle(MESSX, MESSY-1, 1024, 32, MakeColor(0, 0, 0), true);
+		DrawBufferRectangle(BUFFER_DISPLAY, MESSX, MESSY-1, 1024, 32, MakeColor(0, 0, 0), true);
 	}
 
 	SaveCLUTChannelData(folderPath);
 
-	delete pChannelBuffer;
+	delete [] pChannelBuffer;
 
 	return 1;
 }
@@ -814,7 +902,7 @@ int LoadChannelThumbnails(string &folderPath)
 
 		if (p.path().extension() == ext && (filename.find("Base") != string::npos))
 		{
-			DrawRectangle(MESSX, MESSY - 1, 1024, 32, MakeColor(0, 0, 0), true);
+			DrawBufferRectangle(BUFFER_DISPLAY, MESSX, MESSY - 1, 1024, 32, MakeColor(0, 0, 0), true);
 			DrawString(MESSX, MESSY, string("Loading: ") + filename, MakeColor(255, 255, 255));
 
 			uint32_t* thumbBitsIt = thumbBits;
@@ -828,7 +916,7 @@ int LoadChannelThumbnails(string &folderPath)
 			{
 				for (int dx = x; dx < x + 64; dx++)
 				{
-					SetPixel(dx, dy, *thumbBitsIt++);
+					SetDisplayBufferPixel(dx, dy, *thumbBitsIt++);
 				}
 			}
 
@@ -838,9 +926,9 @@ int LoadChannelThumbnails(string &folderPath)
 
 	DrawString(273, g_clutBase + 247, to_string(count) + " textures", MakeColor(255, 255, 255));
 
-	delete thumbBits;
+	delete [] thumbBits;
 
-	DrawRectangle(MESSX, MESSY - 1, 1024, 32, MakeColor(0, 0, 0), true);
+	DrawBufferRectangle( BUFFER_DISPLAY, MESSX, MESSY - 1, 1024, 20, MakeColor( 0, 0, 0 ), true );
 	DrawString(MESSX, MESSY, string("Successfully loaded ") + to_string(count) + " textures.", MakeColor(255, 255, 255));
 
 	return count;
@@ -902,7 +990,7 @@ int RestorePNGThumbnails(string &folderPath)
 
 	LoadPNGBits(filename, 2048, 2048, g_pThumbBuffer);
 
-	DrawRectangle(MESSX, MESSY-1, 1024, 32, MakeColor(0, 0, 0), true);
+	DrawBufferRectangle( BUFFER_DISPLAY, MESSX, MESSY - 1, 1024, 20, MakeColor( 0, 0, 0 ), true );
 	DrawString(MESSX, MESSY, string("Successfully restored ") + to_string(files) + " textures.", MakeColor(255, 255, 255));
 
 	return true;
@@ -957,7 +1045,7 @@ int LoadPNGThumbnails(string &folderPath)
 			outputFile << p.path().filename() << " " << to_string(cftime) << '\n';
 			g_vTextures.push_back(p.path().filename().string());
 		
-			DrawRectangle(MESSX, MESSY-1, 1024, 32, MakeColor(0, 0, 0), true);
+			DrawBufferRectangle(BUFFER_DISPLAY, MESSX, MESSY-1, 1024, 32, MakeColor(0, 0, 0), true);
 			DrawString(MESSX, MESSY, string("Loading: ") + filename, MakeColor(255, 255, 255));
 
 			uint32_t* thumbBitsIt = thumbBits;
@@ -979,7 +1067,7 @@ int LoadPNGThumbnails(string &folderPath)
 		}
 	}
 
-	delete thumbBits;
+	delete [] thumbBits;
 
 	string fileAndPath = folderPath + string("\\.Thumbnails.png");
 
@@ -987,7 +1075,7 @@ int LoadPNGThumbnails(string &folderPath)
 
 	int ret = SaveNewBitmap2PNG(g_pThumbBuffer, fileAndPath, 2048, 2048);
 
-	DrawRectangle(MESSX, MESSY-1, 1024, 32, MakeColor(0, 0, 0), true);
+	DrawBufferRectangle(BUFFER_DISPLAY, MESSX, MESSY-1, 1024, 20, MakeColor(0, 0, 0), true);
 	DrawString(MESSX, MESSY, string("Successfully loaded ") + to_string(count) + " textures.", MakeColor(255, 255, 255));
 
 	outputFile.close();
@@ -1119,4 +1207,92 @@ int Unmangle(unsigned char *dest, unsigned char *source)
 		}
 	}
 	return (int)(dest - start);
+}
+
+// This block of numbers encodes a monochrome, 5-pixel-tall font for the first 127 ASCII characters!
+//
+// Bits are shifted out one at a time as each row is drawn (top to bottom).  Because each glyph fits
+// inside an at-most 5x5 box, we can store all 5x5 = 25-bits fit inside a 32-bit unsigned int with
+// room to spare.  That extra space is used to store that glyph's width in the most significant nibble.
+//
+// The first 32 entries are unprintable characters, so each is totally blank with a width of 0
+//
+static const unsigned int Font[128] = {
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0x10000000, 0x10000017, 0x30000C03, 0x50AFABEA, 0x509AFEB2, 0x30004C99, 0x400A26AA, 0x10000003, 0x2000022E, 0x200001D1, 0x30001445, 0x300011C4, 0x10000018, 0x30001084, 0x10000010, 0x30000C98,
+	0x30003A2E, 0x300043F2, 0x30004AB9, 0x30006EB1, 0x30007C87, 0x300026B7, 0x300076BF, 0x30007C21, 0x30006EBB, 0x30007EB7, 0x1000000A, 0x1000001A, 0x30004544, 0x4005294A, 0x30001151, 0x30000AA1,
+	0x506ADE2E, 0x300078BE, 0x30002ABF, 0x3000462E, 0x30003A3F, 0x300046BF, 0x300004BF, 0x3000662E, 0x30007C9F, 0x1000001F, 0x30003E08, 0x30006C9F, 0x3000421F, 0x51F1105F, 0x51F4105F, 0x4007462E,
+	0x300008BF, 0x400F662E, 0x300068BF, 0x300026B2, 0x300007E1, 0x30007E1F, 0x30003E0F, 0x50F8320F, 0x30006C9B, 0x30000F83, 0x30004EB9, 0x2000023F, 0x30006083, 0x200003F1, 0x30000822, 0x30004210,
+	0x20000041, 0x300078BE, 0x30002ABF, 0x3000462E, 0x30003A3F, 0x300046BF, 0x300004BF, 0x3000662E, 0x30007C9F, 0x1000001F, 0x30003E08, 0x30006C9F, 0x3000421F, 0x51F1105F, 0x51F4105F, 0x4007462E,
+	0x300008BF, 0x400F662E, 0x300068BF, 0x300026B2, 0x300007E1, 0x30007E1F, 0x30003E0F, 0x50F8320F, 0x30006C9B, 0x30000F83, 0x30004EB9, 0x30004764, 0x1000001F, 0x30001371, 0x50441044, 0x00000000,
+};
+
+#define FONT_SCALE 3
+// Returns the width (in pixels) that the given string will require when drawn
+int MeasureString(const std::string &s)
+{
+	// We're going to sum the width of each character in the string
+	int result = 0;
+
+	for (char c : s)
+	{
+		// Grab the glyph for that character from our font
+		unsigned int glyph = Font[c];
+
+		// Retrieve the width (stored in the top nibble)
+		int width = glyph >> 28;
+
+		// Skip invisible characters
+		if (width == 0) continue;
+
+		// The +1 is for the space between letters
+		result += (width *FONT_SCALE) + (int)ceil(FONT_SCALE / 1.5f);
+	}
+
+	// Trim the trailing space that we added on the last letter
+	// (as long as there was at least one printable character)
+	if (result > 0) result -= 1;
+
+	return result;
+}
+
+// Draws a single character to the screen
+//
+// Returns the width of the printed character in pixels
+//
+
+int DrawCharacter(int left, int top, char c, Color color)
+{
+	unsigned int glyph = Font[c];
+	int width = (glyph >> 28);
+
+	// Loop over the bounding box of the glyph
+	for (int x = left; x < left + (width*FONT_SCALE); x += FONT_SCALE)
+	{
+		for (int y = top; y < top + (5 * FONT_SCALE); y += FONT_SCALE)
+		{
+			// If the current (LSB) bit is 1, we draw this pixel
+			if ((glyph & 1) == 1)
+			{
+				for (int dy = 0; dy < FONT_SCALE; dy++)
+				{
+					for (int dx = 0; dx < FONT_SCALE; dx++)
+						SetDisplayBufferPixel(x + dx, y + dy, color);
+				}
+			}
+			// Shift out the next pixel from our packed glyph
+			glyph = glyph >> 1;
+		}
+	}
+
+	return width * FONT_SCALE;
+}
+
+void DrawString(int x, int y, const std::string &s, const Color color)
+{
+	for (char c : s)
+	{
+		// The +1 is for the space between letters
+		x += DrawCharacter(x, y, c, color) + (int)ceil(FONT_SCALE / 1.5f);
+	}
 }

@@ -22,10 +22,10 @@ struct PIXEL_DATA_BLOCK
 	short frameBufferY;
 	short dataSizeX;
 	short dataSizeY;
-	short pixelData[(32*32)/4];
+	short pixelData[(32 * 32) / 4];
 };
 
-struct TIM_FILE 
+struct TIM_FILE
 {
 	int colourMode;
 	int clutMode;
@@ -34,7 +34,7 @@ struct TIM_FILE
 };
 
 
-struct SHARED_CLUT 
+struct SHARED_CLUT
 {
 	short clutData[16];
 	int	channels[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
@@ -71,13 +71,13 @@ struct SEGMENT
 	// Info used for grouping segments
 	UINT16 		sSegmentInfo; // 8 bytes
 
-	// Dynamic RGB and static intensity valuses
+							  // Dynamic RGB and static intensity valuses
 	VERTEXINFO	strVertexInfo[25]; // 100 bytes
 
-	// Tile texture information
+								   // Tile texture information
 	POLYSTRUCT 	strTilePolyStruct[16]; // 256 bytes
 
-	// Link to objects occupying tile
+									   // Link to objects occupying tile
 	UINT32 obpWorldObjectPtr; // 4 bytes 
 }; 	// 368 Bytes
 
@@ -91,7 +91,7 @@ Color GetCLUTcolour(CLUT_BLOCK& clut, int index);
 Color GetOriginalCLUTcolour(SHARED_CLUT& clut, int index);
 int CalculateUniqueCLUTs(TIM_FILE* pTims, int timCount, vector<SHARED_CLUT> &vCLUTs);
 int UnmanglePMM(char* filename, SEGMENT* &pSegments);
-int DrawSegments2Buffer(SEGMENT* pSegments );
+int DrawSegments2Buffer(SEGMENT* pSegments);
 int SaveChannelPNGs(string &folderPath, SEGMENT* pSegmentData, TIM_FILE* pTIMData);
 int SaveDiffusePNG(string &folderPath, SEGMENT* pSegmentData, TIM_FILE* pTIMData);
 int SaveChannelPNGs(string & folderPath, SEGMENT * pSegmentData, TIM_FILE * pTIMData);
@@ -99,3 +99,8 @@ int LoadCLUTChannelData(string &folderPath);
 int SaveCLUTChannelData(string &folderPath);
 int LoadPNGThumbnails(string &folderPath);
 int LoadChannelThumbnails(string &folderPath);
+void BlitPixels2Display(uint32_t* pSource, int destX, int destY, int sourceX, int sourceY, int w, int h, int sourceW);
+void DrawBufferRectangle(int buffer, int x, int y, int w, int h, Color c, bool fill);
+int MeasureString(const std::string &s);
+int DrawCharacter(int left, int top, char c, Color color);
+void DrawString(int x, int y, const std::string &s, const Color color);

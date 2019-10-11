@@ -66,7 +66,6 @@ int main()
 	// Not officially a console app, but we can grab the arguments this way in a Win32 app
 	int argc = __argc;
 	char** argv = __argv;
-	string fileAndPath(argv[1]);
 	TIM_FILE* pTIMData = 0;
 	SEGMENT* pSegmentData = 0;
 	g_pMapBuffer = new uint32_t[MAP_WIDTH * MAP_HEIGHT];
@@ -84,7 +83,9 @@ int main()
 	// **************************************
 
 	if (argc < 2)
-		return FatalError("Error: No file provided");
+		return FatalError("Error: No file provided - e.g. add \"..\\MapData\\MAPS\\ROAD.PTM\\\" to Debugging->Command Arguments");
+
+	string fileAndPath(argv[1]);
 
 	if (fileAndPath.find(".PTM") == string::npos)
 		return FatalError("Error: AutoSplat can only process files with the PTM file extension.");
@@ -463,6 +464,7 @@ int FatalError(const char* message)
 {
 	cout << message << endl;
 	DrawString(6, 4, message, MakeColor(255, 0, 0));
+	Present(g_pDisplayBuffer);
 	return -1;
 }
 
@@ -471,6 +473,7 @@ int Error(const char* message)
 {
 	cout << message << endl;
 	DrawString(MESSX, MESSY, message, MakeColor(255, 0, 0));
+	Present(g_pDisplayBuffer);
 	return -1;
 }
 

@@ -819,12 +819,11 @@ int CopyTIM2Buffer(int sourcex, int sourcey, int destx, int desty, int rot)
 //				(32-bit) and copying it automatically propogates any colour changes to the map
 int DrawSegments2Buffer(SEGMENT* pSegments)
 {
-	const int SEGMENTS_IN_MAP     = 16;
-	const int TILES_IN_SEGMENT    = 4;
-	const int TILE_SIZE_PIXELS    = 32;
+	const int SEGMENTS_IN_MAP     = 16; // 16x16 segments in a map
+	const int TILES_IN_SEGMENT    = 4;  // 4x4 tiles in a segment
+	const int TILE_SIZE_PIXELS    = 32; // 32x32 pixels in a tile
 	const int SEGMENT_SIZE_PIXELS = (TILE_SIZE_PIXELS * TILES_IN_SEGMENT);
 
-	// 16x16 segments in a map
 	for (int sy = 0; sy < SEGMENTS_IN_MAP; ++sy)
 	{
 		for (int sx = 0; sx < SEGMENTS_IN_MAP; ++sx)
@@ -832,7 +831,6 @@ int DrawSegments2Buffer(SEGMENT* pSegments)
 			// Get the segment at coordinates (sx, sy) in the pSegments array.
 			const SEGMENT& segment = pSegments[sx + sy * SEGMENTS_IN_MAP];
 
-			// 4x4 tiles in a segment
 			for (int ty = 0; ty < TILES_IN_SEGMENT; ++ty)
 			{
 				for (int tx = 0; tx < TILES_IN_SEGMENT; ++tx)

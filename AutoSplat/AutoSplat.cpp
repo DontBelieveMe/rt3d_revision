@@ -737,16 +737,78 @@ int CalculateUniqueCLUTs(TIM_FILE* pTims, int timCount, vector<SHARED_CLUT> &vCL
 	return uniqueCLUTs;
 }
 
-
-
 // Function:	CopyTIM2Buffer
 // Description: Copies a TIM from the display buffer to the map buffer in the correct orientation
 // Arguments:	sourcex/sourcey - the top left pixel in the display buffer to copy from 
 //				destx/desty - the top left pixel in the map buffer to copy to 
-
 int CopyTIM2Buffer(int sourcex, int sourcey, int destx, int desty, int rot)
 {
-	// TO DO: Implement this function (see slides)
+	// Blit a TIM from the display buffer (at coordinates [sourcex, sourcey]) onto
+	// the map buffer (at coordinates [sourcex, sourcey]), taking into account the
+	// specified rotation
+	for (int y = 0; y < 32; ++y)
+	{
+		for (int x = 0; x < 32; ++x)
+		{
+			int pixelDestX = destx + x;
+			int pixelDestY = desty + y;
+
+			switch (rot)
+			{
+			// No Flip (Normal)
+			case 0:
+				break;
+
+			// Flip X (Normal)
+			case 1:
+				pixelDestX = destx + (31 - x);
+				pixelDestY = desty + y;
+				break;
+
+			// Flip X (Inv.)
+			case 2:
+				pixelDestX = destx + (31 - y);
+				pixelDestY = desty + x ;
+				break;
+
+			// Flip X, Y (Inv.)
+			case 3:
+				pixelDestX = destx + (31 - y);
+				pixelDestY = desty + (31 - x);
+				break;
+
+			// Flip X, Y (Normal)
+			case 4:
+				pixelDestX = destx + (31 - x);
+				pixelDestY = desty + (31 - y);
+				break;
+
+			// Flip Y (Normal)
+			case 5:
+				pixelDestX = destx + x;
+				pixelDestY = desty + (31 - y);
+				break;
+
+			// Flip Y (Inv.)
+			case 6:
+				pixelDestX = destx + y;
+				pixelDestY = desty + (31 - x);
+				break;
+
+			// No Flip (Inv.)
+			case 7:
+				pixelDestX = destx + y;
+				pixelDestY = desty + x;
+				break;
+			}
+
+			const Color timPixelColor = GetDisplayBufferPixel(sourcex + x, sourcey + y);
+			SetMapBufferPixel(pixelDestX, pixelDestY, timPixelColor);
+		}
+	}
+
+	// NB: No idea what this return value is or what it should be since it's not used
+	//     anywhere else in the code. Just leave it as it was before.
 	return 0;
 }
 
@@ -757,9 +819,43 @@ int CopyTIM2Buffer(int sourcex, int sourcey, int destx, int desty, int rot)
 //				(32-bit) and copying it automatically propogates any colour changes to the map
 int DrawSegments2Buffer(SEGMENT* pSegments)
 {
-	// TO DO: Implement this function (see slides)
-	// Note the code below should copy the TIM at index "tileIndex" to the map grid square "mapIndex"
-	// CopyTIM2Buffer(_TIMXPOS(tileIndex), _TIMYPOS(tileIndex), _MAPXPOS(mapIndex), _MAPYPOS(mapIndex), tileRot);
+	const int SEGMENTS_IN_MAP     = 16;
+	const int TILES_IN_SEGMENT    = 4;
+	const int TILE_SIZE_PIXELS    = 32;
+	const int SEGMENT_SIZE_PIXELS = (TILE_SIZE_PIXELS * TILES_IN_SEGMENT);
+
+	// 16x16 segments in a map
+	for (int sy = 0; sy < SEGMENTS_IN_MAP; ++sy)
+	{
+		for (int sx = 0; sx < SEGMENTS_IN_MAP; ++sx)
+		{
+			// Get the segment at coordinates (sx, sy) in the pSegments array.
+			const SEGMENT& segment = pSegments[sx + sy * SEGMENTS_IN_MAP];
+
+			// 4x4 tiles in a segment
+			for (int ty = 0; ty < TILES_IN_SEGMENT; ++ty)
+			{
+				for (int tx = 0; tx < TILES_IN_SEGMENT; ++tx)
+				{
+					// Get the tile in the segment at coordinates (tx, ty)
+					const POLYSTRUCT& tile = segment.strTilePolyStruct[tx + ty * TILES_IN_SEGMENT];
+
+					// Calculate the position (in pixels) to put the tile on the map.
+					// Do this by taking the offset of the current tile in the segment (in pixels)
+					// and adding it to the offset of the segment (in pixels)
+					const int mapX = (TILE_SIZE_PIXELS * tx) + (sx * SEGMENT_SIZE_PIXELS);
+					const int mapY = (TILE_SIZE_PIXELS * ty) + (sy * SEGMENT_SIZE_PIXELS);
+
+					// Blit the tile to the map at coordinates (mapX, mapY)
+					CopyTIM2Buffer(_TIMXPOS(tile.cTileRef), _TIMYPOS(tile.cTileRef),
+					               mapX, mapY, tile.cRot);
+				}
+			}
+		}
+	}
+
+	// NB: No idea what this return value is or what it should be since it's not used
+	//     anywhere else in the code. Just leave it as it was before.
 	return 0;
 }
 

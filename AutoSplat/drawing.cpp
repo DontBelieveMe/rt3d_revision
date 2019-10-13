@@ -53,7 +53,7 @@
 #include <thread>
 #include <numeric>
 #include <algorithm>
-
+#include <functional>
 
 
 
